@@ -7,7 +7,7 @@ RUN apt-get remove -y docker docker-engine docker.io containerd runc docker-ce-c
 
 # Install dependencies for Docker installation
 RUN apt-get update && \
-    apt-get install -y ca-certificates curl && \
+    apt-get install -y ca-certificates curl python3 && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc
