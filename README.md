@@ -47,6 +47,46 @@ Running Jenkins with access to the host Docker socket grants full control over t
 docker compose down
 ```
 
+## Backup and Restore
+
+### Backup Jenkins Data
+Create a backup of all Jenkins data including credentials, pipelines, jobs, and configuration:
+
+```bash
+# Create a backup directory
+mkdir -p ./jenkins-backups
+
+# Backup the entire Jenkins volume to a tar archive
+docker run --rm \
+  -v docker-jenkins_jenkins_home:/var/jenkins_home \
+  -v $(pwd)/jenkins-backups:/backup \
+  alpine tar czf /backup/jenkins-backup-$(date +%Y%m%d-%H%M%S).tar.gz -C /var/jenkins_home .
+```
+
+This creates a timestamped backup file in the `jenkins-backups` directory.
+
+### Restore from Backup
+
+```bash
+# Stop Jenkins
+docker compose down
+
+# Remove old volume (WARNING: This deletes current data)
+docker volume rm docker-jenkins_jenkins_home
+
+# Create new volume
+docker volume create docker-jenkins_jenkins_home
+
+# Restore from backup (replace YYYYMMDD-HHMMSS with your backup timestamp)
+docker run --rm \
+  -v docker-jenkins_jenkins_home:/var/jenkins_home \
+  -v $(pwd)/jenkins-backups:/backup \
+  alpine tar xzf /backup/jenkins-backup-YYYYMMDD-HHMMSS.tar.gz -C /var/jenkins_home
+
+# Start Jenkins
+docker compose up -d
+```
+
 ## Cleaning Up
 To remove all Jenkins data:
 ```bash
