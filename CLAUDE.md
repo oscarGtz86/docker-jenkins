@@ -1,65 +1,107 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este archivo es la guía para Claude Code (claude.ai/code) al trabajar con el código de este
+repositorio. El contexto general del workspace (plataforma de Claro, VPN, seguridad de PROD,
+el flujo común de CI/CD) está en `../CLAUDE.md`.
 
-## Project Overview
+## Resumen del proyecto
 
-This repository provides a Jenkins LTS setup running in Docker with Docker-in-Docker (DinD) capabilities. The architecture allows Jenkins jobs to execute Docker commands using the host's Docker daemon through socket mounting.
+Este repositorio provee una instalación de Jenkins LTS corriendo en Docker con capacidades de
+Docker-in-Docker (DinD). La arquitectura permite que los jobs de Jenkins ejecuten comandos de
+Docker usando el daemon de Docker del host mediante el montaje del socket.
 
-## Architecture
+## Arquitectura
 
-The setup consists of three main components:
+La instalación tiene tres componentes principales:
 
-1. **Dockerfile**: Extends the official `jenkins/jenkins:lts` image and installs Docker CLI, Buildx, and Compose plugins inside the Jenkins container
-2. **docker-compose.yml**: Orchestrates the Jenkins service with privileged mode, socket mounting (`/var/run/docker.sock`), and persistent volume management
-3. **Socket Mounting Strategy**: The host's Docker daemon is made available to Jenkins by mounting `/var/run/docker.sock`, enabling Jenkins to control Docker without running Docker-in-Docker as a separate daemon
+1. **Dockerfile**: extiende la imagen oficial `jenkins/jenkins:lts` e instala dentro del
+   contenedor de Jenkins el CLI de Docker, Buildx y el plugin de Compose.
+2. **docker-compose.yml**: orquesta el servicio de Jenkins con modo privilegiado, montaje del
+   socket (`/var/run/docker.sock`) y volumen persistente.
+3. **Estrategia de montaje del socket**: el daemon de Docker del host queda disponible para
+   Jenkins al montar `/var/run/docker.sock`, de modo que Jenkins controla Docker sin correr
+   Docker-in-Docker como un daemon aparte.
 
-## Common Commands
+## Comandos comunes
 
-### Build and Run
+### Construir y ejecutar
 ```bash
-# Build the custom Jenkins image and start the service
+# Construir la imagen personalizada de Jenkins e iniciar el servicio
 docker compose up -d
 
-# Build without cache (when Dockerfile changes)
+# Construir sin caché (cuando cambia el Dockerfile)
 docker compose build --no-cache
 docker compose up -d
 
-# View logs
+# Ver logs
 docker compose logs -f jenkins
 ```
 
-### Access and Configuration
+### Acceso y configuración
 ```bash
-# Get initial admin password for first-time setup
-docker exec -it <container_name> cat /var/jenkins_home/secrets/initialAdminPassword
+# Obtener la contraseña inicial de administrador en el primer arranque
+docker exec -it <nombre_del_contenedor> cat /var/jenkins_home/secrets/initialAdminPassword
 
-# Access Jenkins shell for debugging
-docker exec -it <container_name> bash
+# Entrar a una shell de Jenkins para depurar
+docker exec -it <nombre_del_contenedor> bash
 ```
 
-### Stop and Clean Up
+### Detener y limpiar
 ```bash
-# Stop Jenkins service
+# Detener el servicio de Jenkins
 docker compose down
 
-# Remove Jenkins data volume (WARNING: deletes all Jenkins configuration and jobs)
+# Borrar el volumen de datos de Jenkins (ADVERTENCIA: borra toda la configuración y los jobs)
 docker volume rm docker-jenkins_jenkins_home
 ```
 
-## Key Configuration Details
+## Detalles clave de configuración
 
-- **Ports**: Jenkins UI on `8080`, agent communication on `50000`
-- **Privileged Mode**: Required for Docker operations within Jenkins
-- **User Context**: Container runs as `root` to access Docker socket
-- **Environment Variables**:
-  - `DOCKER_HOST=unix:///var/run/docker.sock` - Points to host Docker daemon
-  - `DOCKER_BUILDKIT=1` - Enables BuildKit for improved builds
+- **Puertos**: UI de Jenkins en `8080`, comunicación con agentes en `50000`
+- **Modo privilegiado**: requerido para operaciones de Docker dentro de Jenkins
+- **Usuario**: el contenedor corre como `root` para acceder al socket de Docker
+- **Variables de entorno**:
+  - `DOCKER_HOST=unix:///var/run/docker.sock`: apunta al daemon de Docker del host
+  - `DOCKER_BUILDKIT=1`: habilita BuildKit para mejores builds
 
-## Security Considerations
+## Consideraciones de seguridad
 
-The Jenkins container has full access to the host's Docker daemon via socket mounting. This grants complete control over the host system. This setup should only be used in trusted environments, as compromised Jenkins jobs could manipulate host containers and potentially escape containment.
+El contenedor de Jenkins tiene acceso completo al daemon de Docker del host a través del
+socket montado. Eso otorga control total sobre el host. Esta instalación solo debe usarse en
+entornos de confianza, ya que un job de Jenkins comprometido podría manipular los contenedores
+del host y potencialmente escapar del aislamiento.
 
-## Access
+## Acceso
 
-After starting, Jenkins is accessible at `http://localhost:8080`
+Una vez iniciado, Jenkins está disponible en `http://localhost:8080`
+
+## Papel en la plataforma de Claro
+
+Este es el Jenkins que ejecuta el `Jenkinsfile` de claro-api, claro-dashboard, claro-poller,
+claro-snmp-trap y meraki-webhooks. Los pipelines viven en esos repos, no aquí. Los cambios en
+este repo solo deben tocar la imagen y la ejecución de Jenkins. Lo que los pipelines esperan
+de este Jenkins:
+
+- **Docker** con `buildx` (lo instala el `Dockerfile`), más `python3` (lo usan pasos de los
+  pipelines).
+- **Instalaciones de la herramienta NodeJS** con estos nombres exactos: `NodeJS_20_18_0`
+  (claro-api, meraki-webhooks) y `NodeJS_18_20_8` (claro-dashboard). Deben coincidir con el
+  `.nvmrc` de cada repo.
+- **IDs de credenciales**: `dockerhub-creds` (publicar en `developerfocus/*`), `github-user`
+  (hace push a `main` del commit de versión `[ci skip]`), `claro-backend-ssh` /
+  `claro-dashboard-ssh` (despliegues por SSH como `FocusIT`), y los IDs de texto secreto que se
+  usan para generar los `.env` (`MONGO_URL`, `MONGO_DB_NAME`, `SECRET`, `ORA_*`, `OPCHARTS_*`,
+  `SM_*`). Renombrar cualquiera rompe todos los pipelines que lo usan.
+- Alcance de red a los hosts de Claro (`10.20.10.x`) para los despliegues.
+
+## Seguridad
+
+`docker volume rm`, restaurar un respaldo y `docker compose down -v` destruyen los jobs y las
+credenciales de Jenkins. Pregunta al usuario antes de ejecutar cualquiera de ellos y haz antes
+un respaldo (ver README). `jenkins-backups/*.tar.gz` contiene credenciales: nunca subas ni
+compartas esos archivos (`.gitignore` cubre la carpeta).
+
+## Idioma
+
+El español es canónico (ver "Idioma" en `../CLAUDE.md`): comentarios del `Dockerfile` y de
+compose, y la documentación nueva o reescrita, van en español.
